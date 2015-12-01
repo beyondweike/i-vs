@@ -198,7 +198,7 @@ extern "C"
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
     formatter.dateFormat = @"YYYY-MM-dd";// hh:mm:ss
     date = [formatter stringFromDate:[NSDate date]];
-    NSString *fileName = [date stringByAppendingString:@".h264"];
+    NSString *fileName = [date stringByAppendingString:@".flv"];//.h264
     NSString *writablePath = [documentsDirectory stringByAppendingPathComponent:fileName];
     [[NSFileManager defaultManager] removeItemAtPath:writablePath error:nil];
     
@@ -849,12 +849,18 @@ end:
     else
     {
         h264ManagerReady_=NO;
-        //[manager264_ freeX264Resource];
-        //manager264_=nil;
         
-        [cameraStreamManager_ writeEnd];
-        cameraStreamManager_ = nil;
+        [self performSelector:@selector(writeEnd) withObject:nil afterDelay:1.0];
     }
+}
+
+-(void)writeEnd
+{
+    //[manager264_ freeX264Resource];
+    //manager264_=nil;
+    
+    [cameraStreamManager_ writeEnd];
+    cameraStreamManager_ = nil;
 }
 
 #pragma mark - AVCaptureFileOutputRecordingDelegate 视频输出代理

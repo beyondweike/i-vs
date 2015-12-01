@@ -7,11 +7,13 @@
 //
 
 #import "CameraStreamManager.h"
+#import "time.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
     
+#include "libavutil/time.h"
 #include "libavutil/opt.h"
 #include "libavcodec/avcodec.h"
 #include "libavformat/avformat.h"
@@ -22,8 +24,8 @@ extern "C" {
 #endif
 
 const char* TestRTMPOutputPath = "rtmp://139.129.28.153:1935/myapp/test";
-const int CameraWidth=640;
-const int CameraHeight=480;
+const int TestCameraWidth=640;
+const int TestCameraHeight=480;
 const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
 
 @implementation CameraStreamManager
@@ -74,7 +76,6 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     
     /* find the mpeg video encoder */
     AVCodec* codec =avcodec_find_encoder(AV_CODEC_ID_H264);//avcodec_find_encoder_by_name("libx264"); //avcodec_find_encoder(CODEC_ID_H264);//CODEC_ID_H264);
-    
     if (!codec)
     {
         fprintf(stderr, "codec not found\n");
@@ -83,8 +84,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     
     AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
     codecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-    codecCtx->width = CameraWidth;
-    codecCtx->height = CameraHeight;
+    codecCtx->width = TestCameraWidth;
+    codecCtx->height = TestCameraHeight;
     codecCtx->time_base.num = 1;
     codecCtx->time_base.den = 30;
     codecCtx->bit_rate = 800000;
@@ -169,18 +170,10 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         }
     }
     
-    //写文件头（Write file header）
-    int ret = avformat_write_header(outputCtx, NULL);
-    if (ret < 0)
-    {
-        printf( "Error occurred when opening output URL\n");
-        return;
-    }
-    
     outputContext_=outputCtx;
 }
 
--(BOOL)writeHead
+-(void)writeHead
 {
     //写文件头（Write file header）
     int ret = avformat_write_header(outputContext_, NULL);
@@ -190,8 +183,6 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     }
     
     start_time = av_gettime();
-    
-    return ret>=0;
 }
 
 - (void)writeSampleBuffer:(CMSampleBufferRef)sampleBuffer
@@ -213,8 +204,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     avpicture_fill((AVPicture*)outFrame, outBuffer, DestPixFmt, codeContext_->width, codeContext_->height);
     
     //安卓摄像头数据为NV21格式，此处将其转换为YUV420P格式
-    int y_length=CameraWidth*CameraHeight;
-    int uv_length=CameraWidth*CameraHeight/4;
+    int y_length=TestCameraWidth*TestCameraHeight;
+    int uv_length=TestCameraWidth*TestCameraHeight/4;
     memcpy(outFrame->data[0], rawPixelBase, y_length);
     for(int i=0;i<uv_length;i++)
     {
@@ -223,8 +214,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     }
     
     outFrame->format = AV_PIX_FMT_YUV420P;
-    outFrame->width = CameraWidth;
-    outFrame->height = CameraHeight;
+    outFrame->width = TestCameraWidth;
+    outFrame->height = TestCameraHeight;
     
     /* encode the image */
     int got_packet_ptr = 0;

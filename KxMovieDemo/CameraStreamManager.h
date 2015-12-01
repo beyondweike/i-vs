@@ -4,7 +4,7 @@
 //
 //  Created by sunminmin on 15/9/7.
 //  Copyright (c) 2015年 suntongmian@163.com. All rights reserved.
-//
+//  http://blog.csdn.net/nonmarking/article/details/48601317
 
 #import <Foundation/Foundation.h>
 #import <CoreMedia/CoreMedia.h>
