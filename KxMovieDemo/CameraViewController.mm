@@ -212,7 +212,7 @@ extern "C"
     NSString *writablePath = [documentsDirectory stringByAppendingPathComponent:fileName];
     [[NSFileManager defaultManager] removeItemAtPath:writablePath error:nil];
     
-    cameraStreamManager_=[[CameraStreamManager alloc] initWithOutputPath:writablePath];
+    cameraStreamManager_=[[CameraStreamManager alloc] initWithOutputPath:nil];
     [cameraStreamManager_ writeHead];
     
     h264ManagerReady_=YES;

@@ -175,7 +175,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "902"
             endingLineNumber = "902"
-            landmarkName = "-captureOutput22:didOutputSampleBuffer:fromConnection:"
+            landmarkName = "-encode2_H264:"
             landmarkType = "5">
          </BreakpointContent>
       </BreakpointProxy>

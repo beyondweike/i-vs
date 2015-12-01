@@ -104,6 +104,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     codecCtx->qmax = 51;
     //Optional Param
     codecCtx->max_b_frames = 3;
+    codecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER ;
+
     // Set H264 preset and tune
     AVDictionary *param = 0;
     av_dict_set(&param, "preset", "ultrafast", 0);
@@ -136,8 +138,6 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     }
     
     /* Some formats want stream headers to be separate. */
-    //if (outputCtx->oformat->flags & AVFMT_GLOBALHEADER)
-    //    codeContext_->flags |= CODEC_FLAG_GLOBAL_HEADER;
     //av_dump_format(outputCtx, 0, out_filename, 1);
     
     AVStream *out_stream = avformat_new_stream(outputCtx, codeContext_->codec);
