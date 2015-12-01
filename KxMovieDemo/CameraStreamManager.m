@@ -36,6 +36,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     int frameIndex_;
     
     int64_t start_time;
+    
+    AVRational rframeRate_;//AVStream.r_frame_rate
 }
 
 -(void)dealloc
@@ -52,6 +54,9 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         {
             outputPath_=[NSString stringWithUTF8String:TestRTMPOutputPath];
         }
+        
+        rframeRate_.num=30;
+        rframeRate_.den=2;
         
         av_register_all();
         avcodec_register_all();
@@ -254,10 +259,9 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         
         //Write PTS
         AVRational time_base = outputContext_->streams[0]->time_base;//{ 1, 1000 };
-        AVRational r_framerate1 = {60, 2 };//{ 50, 2 };
         AVRational time_base_q = { 1, AV_TIME_BASE };
         //Duration between 2 frames (us)
-        int64_t calc_duration = (double)(AV_TIME_BASE)*(1 / av_q2d(r_framerate1));  //内部时间戳
+        int64_t calc_duration = (double)(AV_TIME_BASE)*(1 / av_q2d(rframeRate_));  //内部时间戳
         //Parameters
         //enc_pkt.pts = (double)(framecnt*calc_duration)*(double)(av_q2d(time_base_q)) / (double)(av_q2d(time_base));
         avpkt.pts = av_rescale_q(frameIndex_*calc_duration, time_base_q, time_base);
@@ -297,13 +301,11 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
 
 - (void)writeEnd
 {
-    return;
-    
     //Flush Encoder
-//    int ret = [self flushEncoder:outputContext_ streamIndex:0];
-//    if (ret < 0) {
-//        printf("Flushing encoder failed\n");
-//    }
+    int ret = [self flushEncoder:outputContext_ streamIndex:0];
+    if (ret < 0) {
+        printf("Flushing encoder failed\n");
+    }
     
     //Write file trailer
     av_write_trailer(outputContext_);
@@ -343,10 +345,9 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         
         //Write PTS
         AVRational time_base = ofmt_ctx->streams[stream_index]->time_base;//{ 1, 1000 };
-        AVRational r_framerate1 = { 60, 2 };
         AVRational time_base_q = { 1, AV_TIME_BASE };
         //Duration between 2 frames (us)
-        int64_t calc_duration = (double)(AV_TIME_BASE)*(1 / av_q2d(r_framerate1));  //内部时间戳
+        int64_t calc_duration = (double)(AV_TIME_BASE)*(1 / av_q2d(rframeRate_));  //内部时间戳
         //Parameters
         enc_pkt.pts = av_rescale_q(frameIndex_*calc_duration, time_base_q, time_base);
         enc_pkt.dts = enc_pkt.pts;

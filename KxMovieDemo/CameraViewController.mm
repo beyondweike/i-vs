@@ -544,9 +544,7 @@ end:
             int64_t pts_time = av_rescale_q(pkt.dts, time_base, time_base_q);
             int64_t now_time = av_gettime() - start_time;
             if (pts_time > now_time)
-                // av_usleep(pts_time - now_time);
-                av_usleep(1000);
-            
+                av_usleep(pts_time - now_time);
         }
         
         in_stream  = ifmt_ctx->streams[pkt.stream_index];
@@ -867,106 +865,6 @@ end:
     
     [cameraStreamManager_ writeEnd];
     cameraStreamManager_ = nil;
-}
-
-#pragma mark - AVCaptureFileOutputRecordingDelegate 视频输出代理
--(void)captureOutput:(AVCaptureFileOutput *)captureOutput didStartRecordingToOutputFileAtURL:(NSURL *)fileURL fromConnections:(NSArray *)connections
-{
-    NSLog(@"开始录制...");
-}
-
--(void)captureOutput:(AVCaptureFileOutput *)captureOutput didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL fromConnections:(NSArray *)connections error:(NSError *)error
-{
-    NSLog(@"视频录制完成.");
-    
-    /*
-     //视频录入完成之后在后台将视频存储到相簿
-     UIBackgroundTaskIdentifier lastBackgroundTaskIdentifier=self.backgroundTaskIdentifier;
-     self.backgroundTaskIdentifier=UIBackgroundTaskInvalid;
-    ALAssetsLibrary *assetsLibrary=[[ALAssetsLibrary alloc]init];
-    [assetsLibrary writeVideoAtPathToSavedPhotosAlbum:outputFileURL completionBlock:^(NSURL *assetURL, NSError *error)
-    {
-        if (error)
-        {
-            NSLog(@"保存视频到相簿过程中发生错误，错误信息：%@",error.localizedDescription);
-        }
-        NSLog(@"outputUrl:%@",outputFileURL);
-        [[NSFileManager defaultManager] removeItemAtURL:outputFileURL error:nil];
-        if (lastBackgroundTaskIdentifier!=UIBackgroundTaskInvalid)
-        {
-            [[UIApplication sharedApplication] endBackgroundTask:lastBackgroundTaskIdentifier];
-        }
-        NSLog(@"成功保存视频到相簿.");
-    }];
-    */
-}
-
-#pragma mark - AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate
-- (void)captureOutput22:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection
-{
-    if(captureOutput!=videoDataOutput_)
-    {
-        return;
-    }
-    
-    // sampleBuffer now contains an individual frame of raw video frames
-    CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    
-    CVPixelBufferLockBaseAddress(pixelBuffer, 0);
-    
-    // access the data
-    int width = CVPixelBufferGetWidth(pixelBuffer);
-    int height = CVPixelBufferGetHeight(pixelBuffer);
-    int bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0);
-    unsigned char *rawPixelBase = (unsigned char *)CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0);
-    
-    /*
-    
-    AVFrame *frame = 0;
-    AVPacket packet;
-    
-    // Bit rate
-    context->bit_rate = 400000; // HARD CODE
-    context->bit_rate_tolerance = 10;
-    // Resolution
-    context->width = width;
-    context->height = height;
-    // Frames Per Second
-    context->time_base = (AVRational) {1,25};
-    context->gop_size = 1;
-    //context->max_b_frames = 1;
-    context->pix_fmt = AV_PIX_FMT_RGB32;
-    
-    // Open the codec
-    if (avcodec_open2(context, codec, 0) < 0) {
-        NSLog(@"Unable to open codec");
-        return;
-    }
-    
-    
-    // Create the frame
-    frame = av_frame_alloc();
-    if (!frame) {
-        NSLog(@"Unable to alloc frame");
-        return;
-    }
-    frame->format = context->pix_fmt;
-    frame->width = context->width;
-    frame->height = context->height;
-    
-    
-    avpicture_fill((AVPicture *) frame, rawPixelBase, context->pix_fmt, frame->width, frame->height);
-    
-    int got_output = 0;
-    av_init_packet(&packet);
-    avcodec_encode_video2(context, &packet, frame, &got_output);
-    
-    // Unlock the pixel data
-    CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
-     
-     */
-    
-    
 }
 
 //http://blog.sina.com.cn/s/blog_5ec985eb0101t684.html
@@ -1396,6 +1294,39 @@ end:
     }
 }
 
+#pragma mark - AVCaptureFileOutputRecordingDelegate 视频输出代理
+-(void)captureOutput:(AVCaptureFileOutput *)captureOutput didStartRecordingToOutputFileAtURL:(NSURL *)fileURL fromConnections:(NSArray *)connections
+{
+    NSLog(@"开始录制...");
+}
+
+-(void)captureOutput:(AVCaptureFileOutput *)captureOutput didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL fromConnections:(NSArray *)connections error:(NSError *)error
+{
+    NSLog(@"视频录制完成.");
+    
+    /*
+     //视频录入完成之后在后台将视频存储到相簿
+     UIBackgroundTaskIdentifier lastBackgroundTaskIdentifier=self.backgroundTaskIdentifier;
+     self.backgroundTaskIdentifier=UIBackgroundTaskInvalid;
+     ALAssetsLibrary *assetsLibrary=[[ALAssetsLibrary alloc]init];
+     [assetsLibrary writeVideoAtPathToSavedPhotosAlbum:outputFileURL completionBlock:^(NSURL *assetURL, NSError *error)
+     {
+     if (error)
+     {
+     NSLog(@"保存视频到相簿过程中发生错误，错误信息：%@",error.localizedDescription);
+     }
+     NSLog(@"outputUrl:%@",outputFileURL);
+     [[NSFileManager defaultManager] removeItemAtURL:outputFileURL error:nil];
+     if (lastBackgroundTaskIdentifier!=UIBackgroundTaskInvalid)
+     {
+     [[UIApplication sharedApplication] endBackgroundTask:lastBackgroundTaskIdentifier];
+     }
+     NSLog(@"成功保存视频到相簿.");
+     }];
+     */
+}
+
+#pragma mark - AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection
 {
     if(captureOutput==videoDataOutput_)
