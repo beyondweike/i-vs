@@ -203,14 +203,32 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     AVFrame* outFrame = av_frame_alloc();
     avpicture_fill((AVPicture*)outFrame, outBuffer, DestPixFmt, codeContext_->width, codeContext_->height);
     
-    //安卓摄像头数据为NV21格式，此处将其转换为YUV420P格式
+    /*
+     NV21就是 YUV420SP
+     NV12就是 YUV420SP格式，Y分量平面格式，UV打包格式
+     SP(Semi-Planar)指的是YUV不是分成3个平面而是分成2个平面。Y数据一个平面，UV数据合用一个平面。UV平面的数据格式是UVUVUV..
+     NV12和NV21属于YUV420格式，是一种two-plane模式，即Y和UV分为两个Plane，但是UV（CbCr）为交错存储，而不是分为三个plane
+
+     NV12与NV21类似，U 和 V 交错排列,不同在于UV顺序。
+     I420: YYYYYYYY UU VV    =>YUV420P
+     YV12: YYYYYYYY VV UU    =>YUV420P
+     NV12: YYYYYYYY UVUV     =>YUV420SP
+     NV21: YYYYYYYY VUVU     =>YUV420SP
+     */
+    
+    //安卓摄像头数据为NV21格式，iPhone为NV12，此处将其转换为YUV420P格式
     int y_length=TestCameraWidth*TestCameraHeight;
     int uv_length=TestCameraWidth*TestCameraHeight/4;
     memcpy(outFrame->data[0], rawPixelBase, y_length);
     for(int i=0;i<uv_length;i++)
     {
-        *(outFrame->data[2]+i)=*(rawPixelBase + y_length+i*2);
-        *(outFrame->data[1]+i)=*(rawPixelBase + y_length+i*2+1);
+        //NV21
+        //*(outFrame->data[2]+i)=*(rawPixelBase + y_length+i*2);
+        //*(outFrame->data[1]+i)=*(rawPixelBase + y_length+i*2+1);
+        
+        //NV12
+        *(outFrame->data[1]+i)=*(rawPixelBase + y_length + i*2);
+        *(outFrame->data[2]+i)=*(rawPixelBase + y_length + i*2+1);
     }
     
     outFrame->format = AV_PIX_FMT_YUV420P;
