@@ -30,11 +30,10 @@ extern "C"
 #include "libavdevice/avdevice.h"
 }
 
-#import "X264Manager.h"
 #import "CameraStreamManager.h"
 
 
-@interface CameraViewController() <AVCaptureFileOutputRecordingDelegate,AVCaptureVideoDataOutputSampleBufferDelegate>
+@interface CameraViewController() <AVCaptureFileOutputRecordingDelegate,AVCaptureVideoDataOutputSampleBufferDelegate,AVCaptureAudioDataOutputSampleBufferDelegate>
 {
 }
 
@@ -46,8 +45,10 @@ extern "C"
 
 @end
 
+//http://ios.jobbole.com/82051/
 @implementation CameraViewController
 {
+    
     //AVCaptureSession* session_;
     //AVAssetWriter* assetWriter_;
     AVCaptureVideoDataOutput* videoDataOutput_;
@@ -68,7 +69,6 @@ extern "C"
     int frameIndex_;
     
     CameraStreamManager* cameraStreamManager_;
-    X264Manager* manager264_;
     BOOL h264ManagerReady_;
     
     int64_t start_time;
@@ -172,6 +172,16 @@ extern "C"
         if ([_captureSession canAddOutput:captureVideoDataOutput]) {
             [_captureSession addOutput:captureVideoDataOutput];
         }
+        
+        // 创建一个AVCaptureAudioDataOutput对象，将其添加到session
+        AVCaptureAudioDataOutput* captureAudioDataOutput = [[AVCaptureAudioDataOutput alloc] init];
+        queue = dispatch_queue_create("MyAudioQueue", NULL);
+        [captureAudioDataOutput setSampleBufferDelegate:self queue:queue];
+        audioDataOutput_=captureAudioDataOutput;
+        
+        if ([_captureSession canAddOutput:captureAudioDataOutput]) {
+            [_captureSession addOutput:captureAudioDataOutput];
+        }
     }
     
     //创建视频预览层，用于实时展示摄像头状态
@@ -201,10 +211,6 @@ extern "C"
     NSString *fileName = [date stringByAppendingString:@".flv"];//.h264
     NSString *writablePath = [documentsDirectory stringByAppendingPathComponent:fileName];
     [[NSFileManager defaultManager] removeItemAtPath:writablePath error:nil];
-    
-//    manager264_ = [[X264Manager alloc]init];
-//    [manager264_ setFileSavedPath:writablePath];
-//    [manager264_ setX264Resource];
     
     cameraStreamManager_=[[CameraStreamManager alloc] initWithOutputPath:writablePath];
     [cameraStreamManager_ writeHead];
@@ -895,7 +901,7 @@ end:
     */
 }
 
-#pragma mark - AVCaptureVideoDataOutputSampleBufferDelegate
+#pragma mark - AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate
 - (void)captureOutput22:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection
 {
     if(captureOutput!=videoDataOutput_)
@@ -1392,111 +1398,17 @@ end:
 
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection
 {
-    if(captureOutput!=videoDataOutput_)
+    if(captureOutput==videoDataOutput_)
     {
-        return;
-    }
-
-    //[self encode2_H264:sampleBuffer];
-    //[self encodeH264:sampleBuffer];
-    //return;
-    
-    if(h264ManagerReady_)
-    {
-        [cameraStreamManager_ writeSampleBuffer:sampleBuffer];
-    }
-    return;
-    
-    if(h264ManagerReady_)
-    {
-        [manager264_ encoderToH264:sampleBuffer];
-    }
-    return;
-    
-    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    AVPixelFormat format=AV_PIX_FMT_NONE;
-    
-    // Lock the image buffer
-    //CVPixelBufferLockBaseAddress(imageBuffer,0);
-    if(CVPixelBufferLockBaseAddress(imageBuffer, 0) == kCVReturnSuccess)
-    {
-        if(frameWith_<=0)
+        if(h264ManagerReady_)
         {
-            //第一次数据要求：宽高，类型
-            //size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
-            frameWith_ = CVPixelBufferGetWidth(imageBuffer);
-            frameHeight_ = CVPixelBufferGetHeight(imageBuffer);
-            
-            int pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer);
-            switch (pixelFormat)
-            {
-                case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
-                    format=AV_PIX_FMT_NV12;
-                    NSLog(@"Capture pixel format=NV12");
-                    break;
-                case kCVPixelFormatType_422YpCbCr8:
-                    format=AV_PIX_FMT_UYVY422;
-                    NSLog(@"Capture pixel format=UYUY422");
-                    break;
-                default:
-                    format=AV_PIX_FMT_RGB32;
-                    NSLog(@"Capture pixel format=RGB32");
-            }
+            [cameraStreamManager_ writeSampleBuffer:sampleBuffer];
         }
-        
-        UInt8 *bufferPtr = (UInt8 *)CVPixelBufferGetBaseAddressOfPlane(imageBuffer,0);
-        size_t bufferSize = CVPixelBufferGetDataSize(imageBuffer);
-        size_t d= CVPixelBufferGetBytesPerRow(imageBuffer);
-        
-        av_register_all();
-        
-        AVFrame *frm = av_frame_alloc();
-        //int numBytes=avpicture_get_size(format, frameWith_, frameHeight_);
-        //uint8_t* buffer=(uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
-        int result = avpicture_fill((AVPicture*) frm, bufferPtr, format, frameWith_, frameHeight_);
-        
-        AVCodec *codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-        AVCodecContext *c = avcodec_alloc_context3(codec);
-        /* put sample parameters */
-        c->bit_rate = 240000;
-        //    c->bit_rate_tolerance = 10;
-        //    c->me_method = 2;
-        /* resolution must be a multiple of two */
-        c->width = frameWith_;//width;//352;
-        c->height = frameHeight_;//height;//288;
-        /* frames per second */
-        c->time_base= (AVRational){1,25};
-        c->gop_size = 25;//25; /* emit one intra frame every ten frames */
-        c->max_b_frames=1;
-        c->pix_fmt = AV_PIX_FMT_YUV420P;
-        c->thread_count = 1;
-        
-        frm->width=frameWith_;
-        frm->height=frameHeight_;
-        frm->format=c->pix_fmt;
-        
-        /* open it */
-        if (avcodec_open2(c, codec,NULL) < 0) {
-            //Specified pixel format rgba is invalid or not supported
-            fprintf(stderr, "could not open codec\n");
-            return;
-        }
-        
-        AVPacket pkt;
-        int got_packet=0;
-        av_init_packet(&pkt);
-        
-        result = avcodec_encode_video2(c, &pkt, frm, &got_packet);
-        assert(!result);
-        
-        
-        /*We unlock the buffer*/
-        CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
-
-        av_free(frm);
-        av_free(c);
     }
-
+    else if(captureOutput==audioDataOutput_)
+    {
+        
+    }
 }
 
 @end
