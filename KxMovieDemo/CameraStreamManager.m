@@ -378,13 +378,13 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     outFrame->channels=audioDescription->mChannelsPerFrame;
     outFrame->sample_rate=(int)audioDescription->mSampleRate;
     
-    int buf_size=outFrame->nb_samples * av_get_bytes_per_sample(AV_SAMPLE_FMT_FLTP) * outFrame->channels;
-    uint8_t *data=av_malloc((size_t)outFrame->linesize[0]);
+    int buf_size=outFrame->nb_samples * av_get_bytes_per_sample(audioCodeContext_->sample_fmt) * outFrame->channels;
+    uint8_t *outbuff=av_malloc(buf_size);
     outFrame->linesize[0] = buf_size;
-    outFrame->extended_data = outFrame->data[0] = data;
+    outFrame->extended_data = outFrame->data[0] = outbuff;
     
     //my webCamera configured to produce 16bit 16kHz LPCM mono, so sample format hardcoded here, and seems to be correct
-    int ret=avcodec_fill_audio_frame(outFrame, audioCodeContext_->channels, AV_SAMPLE_FMT_FLTP, (uint8_t *)samples, buf_size, 0);
+    int ret=avcodec_fill_audio_frame(outFrame, audioCodeContext_->channels, audioCodeContext_->sample_fmt, (uint8_t *)samples, buf_size, 0);
     
     AVPacket avpkt;
     avpkt.data = NULL;
@@ -392,7 +392,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     av_init_packet(&avpkt);
     
     //下面两句我加的。编码前一定要给frame时间戳
-    //outFrame->pts = 9999;
+    outFrame->pts = 1;
     //lastpts = outFrame->pts + outFrame->nb_samples;
     
     
@@ -405,7 +405,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
 
     }
     
-    av_freep(&samples);
+    av_freep(outbuff);
     av_free_packet(&avpkt);
     av_frame_free(&outFrame);
     
