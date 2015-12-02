@@ -45,7 +45,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
 {
     id outputPath_;
     AVFormatContext* outputContext_;
-    AVCodecContext* codeContext_;
+    AVCodecContext* videoCodeContext_;
+    AVCodecContext* audioCodeContext_;
     int frameIndex_;
     
     int64_t start_time;
@@ -55,6 +56,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
 
 -(void)dealloc
 {
+    avformat_network_deinit();
 }
 
 - (id)initWithOutputPath:(id)outputPath
@@ -75,8 +77,9 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         avcodec_register_all();
         avformat_network_init();
         
-        [self initCodeContext];
-        if(codeContext_)
+        [self initVideoCodeContext];
+        //[self initAudioCodeContext];
+        if(videoCodeContext_)
         {
             [self initOutputContext];
         }
@@ -85,9 +88,9 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     return self;
 }
 
--(void)initCodeContext
+-(void)initVideoCodeContext
 {
-    if(codeContext_)
+    if(videoCodeContext_)
     {
         return;
     }
@@ -129,7 +132,42 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         return;
     }
     
-    codeContext_=codecCtx;
+    videoCodeContext_=codecCtx;
+}
+
+-(void)initAudioCodeContext
+{
+    if(audioCodeContext_)
+    {
+        return;
+    }
+
+    AVCodec* codec =avcodec_find_encoder(AV_CODEC_ID_H264);
+    if (!codec)
+    {
+        fprintf(stderr, "codec not found\n");
+        return;
+    }
+
+    AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
+    codecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER ;
+    
+    //codecCtx->codec_type = AVMEDIA_TYPE_AUDIO;
+    //codecCtx->sample_fmt = AV_SAMPLE_FMT_S16;
+    //codecCtx->sample_rate= 44100;
+    //codecCtx->channel_layout=AV_CH_LAYOUT_STEREO;
+    //codecCtx->channels = av_get_channel_layout_nb_channels(pCodecCtx->channel_layout);
+    //codecCtx->bit_rate = 64000;
+    
+    //Show some information
+    //av_dump_format(pFormatCtx, 0, out_file, 1);
+    
+    if (avcodec_open2(codecCtx, codec, 0) < 0){
+        fprintf(stderr, "could not open codec\n");
+        return;
+    }
+    
+    audioCodeContext_=codecCtx;
 }
 
 -(void)initOutputContext
@@ -153,29 +191,23 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     /* Some formats want stream headers to be separate. */
     //av_dump_format(outputCtx, 0, out_filename, 1);
     
-    AVStream *out_stream = avformat_new_stream(outputCtx, codeContext_->codec);
-    if (!out_stream)
+    //video stream
+    AVStream* videoOutputStream = avformat_new_stream(outputCtx, videoCodeContext_->codec);
+    if (!videoOutputStream)
     {
         printf( "Failed allocating output stream\n");
         return;
     }
+    videoOutputStream->time_base.num = 1;
+    videoOutputStream->time_base.den = 30;
+    videoOutputStream->codec = videoCodeContext_;
     
-    //    int ret = avcodec_copy_context(out_stream->codec, codeContext_);
-    //    if (ret < 0)
-    //    {
-    //        printf( "Failed to copy context from input to output stream codec context\n");
-    //        return;
-    //    }
-    
-    //    out_stream->codec->codec_tag = 0;
-    //    if (outputCtx->oformat->flags & AVFMT_GLOBALHEADER)
-    //    {
-    //        out_stream->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
-    //    }
-    //
-    out_stream->time_base.num = 1;
-    out_stream->time_base.den = 30;
-    out_stream->codec = codeContext_;
+    //audio stream
+//    AVStream* audioOutputStream = avformat_new_stream(outputCtx, 0);
+//    if (!audioOutputStream)
+//    {
+//        return;
+//    }
     
     //打开输出URL（Open output URL）
     if (!(outputCtx->oformat->flags & AVFMT_NOFILE))
@@ -203,7 +235,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     start_time = av_gettime();
 }
 
-- (void)writeSampleBuffer:(CMSampleBufferRef)sampleBuffer
+- (void)writeVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer
 {
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     if(CVPixelBufferLockBaseAddress(imageBuffer, 0) != kCVReturnSuccess)
@@ -215,11 +247,11 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     //int imageWidth = CVPixelBufferGetWidth(imageBuffer);
     //int imageHeight = CVPixelBufferGetHeight(imageBuffer);
     
-    int bytesNum = avpicture_get_size(DestPixFmt, codeContext_->width, codeContext_->height);
+    int bytesNum = avpicture_get_size(DestPixFmt, videoCodeContext_->width, videoCodeContext_->height);
     //create buffer for the output image
     uint8_t* outBuffer = (uint8_t*)av_malloc(bytesNum);
     AVFrame* outFrame = av_frame_alloc();
-    avpicture_fill((AVPicture*)outFrame, outBuffer, DestPixFmt, codeContext_->width, codeContext_->height);
+    avpicture_fill((AVPicture*)outFrame, outBuffer, DestPixFmt, videoCodeContext_->width, videoCodeContext_->height);
     
     /*
      NV21就是 YUV420SP
@@ -261,17 +293,19 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     avpkt.size = 0;
     av_init_packet(&avpkt);
     
-    BOOL ret = avcodec_encode_video2(codeContext_, &avpkt, outFrame, &got_packet_ptr)==0;
+    BOOL ret = avcodec_encode_video2(videoCodeContext_, &avpkt, outFrame, &got_packet_ptr)==0;
     ret=ret && got_packet_ptr>0;
     if(ret)
     {
+        AVStream* videoStream=[self videoStream];
+        
         printf("encoding frame %d , %s , %d\n", frameIndex_, ret?"true":"false", avpkt.size);
         
         frameIndex_++;
-        avpkt.stream_index = outputContext_->streams[0]->index;
+        avpkt.stream_index = videoStream->index;
         
         //Write PTS
-        AVRational time_base = outputContext_->streams[0]->time_base;//{ 1, 1000 };
+        AVRational time_base = videoStream->time_base;//{ 1, 1000 };
         AVRational time_base_q = { 1, AV_TIME_BASE };
         //Duration between 2 frames (us)
         int64_t calc_duration = (double)(AV_TIME_BASE)*(1 / av_q2d(rframeRate_));  //内部时间戳
@@ -286,7 +320,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         int64_t pts_time = av_rescale_q(avpkt.dts, time_base, time_base_q);
         int64_t now_time = av_gettime() - start_time;
         if (pts_time > now_time)
-            av_usleep(pts_time - now_time);
+            av_usleep((unsigned)(pts_time - now_time));
         
         [self writePacket:&avpkt];
     }
@@ -297,6 +331,72 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     
     /*We unlock the buffer*/
     CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
+}
+
+- (void)writeAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer
+{
+    return;
+    
+    //http://course.gdou.com/blog/Blog.pzs/archive/2011/12/14/10882.html
+    //http://www.devdiv.com/forum.php?mod=viewthread&tid=179307
+    //http://blog.csdn.net/leixiaohua1020/article/details/25430449
+    
+    AudioBufferList audioBufferList;
+    CMBlockBufferRef blockBuffer=NULL;
+    NSMutableData* data = [[NSMutableData alloc] init];
+    
+    CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, NULL, &audioBufferList, sizeof(audioBufferList), NULL, NULL, 0, &blockBuffer);
+    
+    UInt32 mNumberBuffers=audioBufferList.mNumberBuffers;
+    for (int y = 0; y < mNumberBuffers; y++)
+    {
+        AudioBuffer audioBuffer = audioBufferList.mBuffers[y];
+        Float32 *frame = (Float32 *)audioBuffer.mData;
+        [data appendBytes:frame length:audioBuffer.mDataByteSize];
+    }
+    
+    CFRelease(blockBuffer);
+    blockBuffer = NULL;
+    
+    
+    AVFrame* pFrame = av_frame_alloc();
+    pFrame->nb_samples= audioCodeContext_->frame_size;
+    pFrame->format= audioCodeContext_->sample_fmt;
+    
+    int size = av_samples_get_buffer_size(NULL, audioCodeContext_->channels,audioCodeContext_->frame_size,audioCodeContext_->sample_fmt, 1);
+    uint8_t* frame_buf = (uint8_t *)av_malloc(size);
+    avcodec_fill_audio_frame(pFrame, audioCodeContext_->channels, audioCodeContext_->sample_fmt,(const uint8_t*)frame_buf, size, 1);
+    
+    AVPacket pkt;
+    av_new_packet(&pkt,size);
+    
+    /*
+    int framenum=1000;
+    for (int i=0; i<framenum; i++){
+        //Read PCM
+        if (fread(frame_buf, 1, size, in_file) <= 0){
+            printf("Failed to read raw data! \n");
+            return -1;
+        }else if(feof(in_file)){
+            break;
+        }
+        pFrame->data[0] = frame_buf;  //PCM Data
+        
+        pFrame->pts=i*100;
+        got_frame=0;
+        //Encode
+        ret = avcodec_encode_audio2(pCodecCtx, &pkt,pFrame, &got_frame);
+        if(ret < 0){
+            printf("Failed to encode!\n");
+            return -1;
+        }
+        if (got_frame==1){
+            printf("Succeed to encode 1 frame! \tsize:%5d\n",pkt.size);
+            pkt.stream_index = audio_st->index;
+            ret = av_write_frame(pFormatCtx, &pkt);
+            av_free_packet(&pkt);
+        }
+    }*/
 }
 
 - (BOOL)writePacket:(AVPacket*)avpkt
@@ -315,49 +415,59 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
 - (void)writeEnd
 {
     //Flush Encoder
-    int ret = [self flushEncoder:outputContext_ streamIndex:0];
-    if (ret < 0) {
-        printf("Flushing encoder failed\n");
-    }
+    [self flushVideoStream];
     
     //Write file trailer
     av_write_trailer(outputContext_);
     
     //Clean
-    if (outputContext_->streams[0])
+    for (int i=0; i<outputContext_->nb_streams; i++)
     {
-        avcodec_close(outputContext_->streams[0]->codec);
+        avcodec_close(outputContext_->streams[i]->codec);
     }
     avio_close(outputContext_->pb);
     avformat_free_context(outputContext_);
 }
 
--(int)flushEncoder:(AVFormatContext *)ofmt_ctx streamIndex:(unsigned int)stream_index
+-(void)flushVideoStream
 {
+    AVStream* videoStream=[self videoStream];
+    if (!videoStream)
+    {
+        return;
+    }
+    
+    if (!(videoStream->codec->codec->capabilities & CODEC_CAP_DELAY))
+    {
+        return;
+    }
+    
     int ret;
     int got_frame;
     AVPacket enc_pkt;
-    if (!(ofmt_ctx->streams[stream_index]->codec->codec->capabilities & CODEC_CAP_DELAY))
-        return 0;
     
     while (1)
     {
         enc_pkt.data = NULL;
         enc_pkt.size = 0;
         av_init_packet(&enc_pkt);
-        ret = avcodec_encode_video2(ofmt_ctx->streams[stream_index]->codec, &enc_pkt,
+        ret = avcodec_encode_video2(videoStream->codec, &enc_pkt,
                                     NULL, &got_frame);
         if (ret < 0)
+        {
             break;
+        }
+        
         if (!got_frame)
         {
             ret = 0;
             break;
         }
+        
         printf("Flush Encoder: Succeed to encode 1 frame!\tsize:%5d\n", enc_pkt.size);
         
         //Write PTS
-        AVRational time_base = ofmt_ctx->streams[stream_index]->time_base;//{ 1, 1000 };
+        AVRational time_base = videoStream->time_base;//{ 1, 1000 };
         AVRational time_base_q = { 1, AV_TIME_BASE };
         //Duration between 2 frames (us)
         int64_t calc_duration = (double)(AV_TIME_BASE)*(1 / av_q2d(rframeRate_));  //内部时间戳
@@ -369,7 +479,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         //转换PTS/DTS（Convert PTS/DTS）
         enc_pkt.pos = -1;
         frameIndex_++;
-        ofmt_ctx->duration = enc_pkt.duration * frameIndex_;
+        outputContext_->duration = enc_pkt.duration * frameIndex_;
         
         BOOL ret=[self writePacket:&enc_pkt];
         if(!ret)
@@ -377,8 +487,38 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
             break;
         }
     }
+}
+
+-(AVStream*)videoStream
+{
+    AVStream* videoStream=nil;
+    for (int i=0; i<outputContext_->nb_streams; i++)
+    {
+        AVStream* stream=outputContext_->streams[i];
+        if(stream->codec->codec_type==AVMEDIA_TYPE_VIDEO)
+        {
+            videoStream=stream;
+            break;
+        }
+    }
     
-    return 0;
+    return videoStream;
+}
+
+-(AVStream*)audioStream
+{
+    AVStream* audioStream=nil;
+    for (int i=0; i<outputContext_->nb_streams; i++)
+    {
+        AVStream* stream=outputContext_->streams[i];
+        if(stream->codec->codec_type==AVMEDIA_TYPE_AUDIO)
+        {
+            audioStream=stream;
+            break;
+        }
+    }
+    
+    return audioStream;
 }
 
 @end

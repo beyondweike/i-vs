@@ -1333,36 +1333,15 @@ end:
     {
         if(h264ManagerReady_)
         {
-            [cameraStreamManager_ writeSampleBuffer:sampleBuffer];
+            [cameraStreamManager_ writeVideoSampleBuffer:sampleBuffer];
         }
     }
     else if(captureOutput==audioDataOutput_)
     {
-        //http://course.gdou.com/blog/Blog.pzs/archive/2011/12/14/10882.html
-        //http://www.devdiv.com/forum.php?mod=viewthread&tid=179307
-        //http://blog.csdn.net/leixiaohua1020/article/details/25430449
-        
-        AudioBufferList audioBufferList;
-        CMBlockBufferRef blockBuffer=NULL;
-        NSMutableData* data = [[NSMutableData alloc] init];
-        
-        CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, NULL, &audioBufferList, sizeof(audioBufferList), NULL, NULL, 0, &blockBuffer);
-        
-        UInt32 mNumberBuffers=audioBufferList.mNumberBuffers;
-        for (int y = 0; y < mNumberBuffers; y++)
+        if(h264ManagerReady_)
         {
-            AudioBuffer audioBuffer = audioBufferList.mBuffers[y];
-            Float32 *frame = (Float32 *)audioBuffer.mData;
-            [data appendBytes:frame length:audioBuffer.mDataByteSize];
+            [cameraStreamManager_ writeAudioSampleBuffer:sampleBuffer];
         }
-        
-        CFRelease(blockBuffer);
-        blockBuffer = NULL;
-        
-
-        
-        
-
     }
 }
 

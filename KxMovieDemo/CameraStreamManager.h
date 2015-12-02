@@ -14,7 +14,8 @@
 - (id)initWithOutputPath:(id)outputPath;
 
 -(void)writeHead;
--(void)writeSampleBuffer:(CMSampleBufferRef)sampleBuffer;
+-(void)writeVideoSampleBuffer:(CMSampleBufferRef)sampleBuffer;
+-(void)writeAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer;
 -(void)writeEnd;
 
 @end
