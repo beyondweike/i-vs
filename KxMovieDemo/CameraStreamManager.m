@@ -78,8 +78,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         avformat_network_init();
         
         [self initVideoCodeContext];
-        //[self initAudioCodeContext];
-        if(videoCodeContext_)
+        [self initAudioCodeContext];
+        if(videoCodeContext_ && audioCodeContext_)
         {
             [self initOutputContext];
         }
@@ -120,7 +120,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     codecCtx->qmax = 51;
     //Optional Param
     codecCtx->max_b_frames = 3;
-    codecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER ;
+    codecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER;
 
     // Set H264 preset and tune
     AVDictionary *param = 0;
@@ -142,22 +142,25 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         return;
     }
 
-    AVCodec* codec =avcodec_find_encoder(AV_CODEC_ID_H264);
+    AVCodec* codec =avcodec_find_encoder(AV_CODEC_ID_AAC);
     if (!codec)
     {
-        fprintf(stderr, "codec not found\n");
+        fprintf(stderr, "codec %s not found\n" ,avcodec_get_name(AV_CODEC_ID_AAC));
         return;
     }
 
     AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
     codecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER ;
-    
-    //codecCtx->codec_type = AVMEDIA_TYPE_AUDIO;
-    //codecCtx->sample_fmt = AV_SAMPLE_FMT_S16;
-    //codecCtx->sample_rate= 44100;
-    //codecCtx->channel_layout=AV_CH_LAYOUT_STEREO;
-    //codecCtx->channels = av_get_channel_layout_nb_channels(pCodecCtx->channel_layout);
-    //codecCtx->bit_rate = 64000;
+    codecCtx->codec_type = AVMEDIA_TYPE_AUDIO;
+    /*AV_SAMPLE_FMT_S16 Specified sample format s16 is invalid or not supported*/
+    codecCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+    codecCtx->sample_rate= 44100;//16000//48000
+    codecCtx->channel_layout=AV_CH_LAYOUT_MONO;//AV_CH_LAYOUT_STEREO;
+    codecCtx->channels = av_get_channel_layout_nb_channels(codecCtx->channel_layout);
+    codecCtx->bit_rate = 64000;//32000
+    codecCtx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
+    codecCtx->profile=FF_PROFILE_AAC_LOW;
+    codecCtx->time_base = (AVRational){1, codecCtx->sample_rate };
     
     //Show some information
     //av_dump_format(pFormatCtx, 0, out_file, 1);
@@ -203,12 +206,14 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     videoOutputStream->codec = videoCodeContext_;
     
     //audio stream
-//    AVStream* audioOutputStream = avformat_new_stream(outputCtx, 0);
-//    if (!audioOutputStream)
-//    {
-//        return;
-//    }
-    
+    AVStream* audioOutputStream = avformat_new_stream(outputCtx, audioCodeContext_->codec);
+    if (!audioOutputStream)
+    {
+        return;
+    }
+    audioOutputStream->codec = audioCodeContext_;
+    //audioOutputStream->id=1;
+
     //打开输出URL（Open output URL）
     if (!(outputCtx->oformat->flags & AVFMT_NOFILE))
     {
@@ -285,14 +290,12 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     outFrame->width = TestCameraWidth;
     outFrame->height = TestCameraHeight;
     
-    /* encode the image */
-    int got_packet_ptr = 0;
     AVPacket avpkt;
-    
-    avpkt.data = NULL;    // packet data will be allocated by the encoder
+    avpkt.data = NULL;
     avpkt.size = 0;
     av_init_packet(&avpkt);
     
+    int got_packet_ptr = 0;
     BOOL ret = avcodec_encode_video2(videoCodeContext_, &avpkt, outFrame, &got_packet_ptr)==0;
     ret=ret && got_packet_ptr>0;
     if(ret)
@@ -335,12 +338,11 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
 
 - (void)writeAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer
 {
-    return;
-    
     //http://course.gdou.com/blog/Blog.pzs/archive/2011/12/14/10882.html
     //http://www.devdiv.com/forum.php?mod=viewthread&tid=179307
     //http://blog.csdn.net/leixiaohua1020/article/details/25430449
     
+    /*
     AudioBufferList audioBufferList;
     CMBlockBufferRef blockBuffer=NULL;
     NSMutableData* data = [[NSMutableData alloc] init];
@@ -356,9 +358,58 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     }
     
     CFRelease(blockBuffer);
-    blockBuffer = NULL;
+    blockBuffer = NULL;*/
     
     
+    
+    CMItemCount numSamples = CMSampleBufferGetNumSamples(sampleBuffer); //CMSampleBufferRef
+    CMBlockBufferRef audioBlockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer);
+    NSUInteger channelIndex = 0;
+    size_t audioBlockBufferOffset = (channelIndex * numSamples * sizeof(SInt16));
+    size_t lengthAtOffset = 0;
+    size_t totalLength = 0;
+    SInt16 *samples = NULL;
+    CMBlockBufferGetDataPointer(audioBlockBuffer, audioBlockBufferOffset, &lengthAtOffset, &totalLength, (char **)(&samples));
+    const AudioStreamBasicDescription *audioDescription = CMAudioFormatDescriptionGetStreamBasicDescription(CMSampleBufferGetFormatDescription(sampleBuffer));
+    
+    AVFrame* outFrame = av_frame_alloc();
+    outFrame->format=audioCodeContext_->sample_fmt;
+    outFrame->nb_samples =(int)numSamples;//audioCodeContext_->frame_size;
+    outFrame->channels=audioDescription->mChannelsPerFrame;
+    outFrame->sample_rate=(int)audioDescription->mSampleRate;
+    
+    int buf_size=outFrame->nb_samples * av_get_bytes_per_sample(AV_SAMPLE_FMT_FLTP) * outFrame->channels;
+    uint8_t *data=av_malloc((size_t)outFrame->linesize[0]);
+    outFrame->linesize[0] = buf_size;
+    outFrame->extended_data = outFrame->data[0] = data;
+    
+    //my webCamera configured to produce 16bit 16kHz LPCM mono, so sample format hardcoded here, and seems to be correct
+    int ret=avcodec_fill_audio_frame(outFrame, audioCodeContext_->channels, AV_SAMPLE_FMT_FLTP, (uint8_t *)samples, buf_size, 0);
+    
+    AVPacket avpkt;
+    avpkt.data = NULL;
+    avpkt.size = 0;
+    av_init_packet(&avpkt);
+    
+    //下面两句我加的。编码前一定要给frame时间戳
+    //outFrame->pts = 9999;
+    //lastpts = outFrame->pts + outFrame->nb_samples;
+    
+    
+    
+    int got_packet=0;
+    ret = avcodec_encode_audio2(audioCodeContext_, &avpkt, outFrame, &got_packet);
+    if (ret >= 0 && got_packet>0)
+    {
+        //av_err2str(ret));
+
+    }
+    
+    av_freep(&samples);
+    av_free_packet(&avpkt);
+    av_frame_free(&outFrame);
+    
+    /*
     AVFrame* pFrame = av_frame_alloc();
     pFrame->nb_samples= audioCodeContext_->frame_size;
     pFrame->format= audioCodeContext_->sample_fmt;
@@ -370,9 +421,9 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     AVPacket pkt;
     av_new_packet(&pkt,size);
     
-    /*
     int framenum=1000;
-    for (int i=0; i<framenum; i++){
+    for (int i=0; i<framenum; i++)
+    {
         //Read PCM
         if (fread(frame_buf, 1, size, in_file) <= 0){
             printf("Failed to read raw data! \n");
@@ -380,6 +431,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         }else if(feof(in_file)){
             break;
         }
+        
         pFrame->data[0] = frame_buf;  //PCM Data
         
         pFrame->pts=i*100;
