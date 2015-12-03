@@ -219,6 +219,9 @@ const BOOL isDataOutput=YES;
     h264ManagerReady_=YES;
 }
 
+//http://blog.csdn.net/cssmhyl/article/details/12089299
+//苹果规定10M以内的视频可以用RTMP，以上的必须用HLS
+//http://blog.csdn.net/chinabinlang/article/details/45672681
 -(void)pushStream:(id)pushFilePath
 {
     AVDictionary* options = NULL;
