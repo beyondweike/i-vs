@@ -301,12 +301,11 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     int got_packet_ptr = 0;
     BOOL ret = avcodec_encode_video2(videoCodeContext_, &avpkt, outFrame, &got_packet_ptr)==0;
     ret=ret && got_packet_ptr>0;
+    printf("encoding frame %d , %s , %d\n", frameIndex_, ret?"true":"false", avpkt.size);
     if(ret)
     {
         AVStream* videoStream=[self videoStream];
-        
-        printf("encoding frame %d , %s , %d\n", frameIndex_, ret?"true":"false", avpkt.size);
-        
+
         frameIndex_++;
         avpkt.stream_index = videoStream->index;
         
@@ -346,10 +345,10 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     //http://blog.csdn.net/leixiaohua1020/article/details/25430449
     //http://www.codes51.com/article/detail_151894.html
 
-    
     char szBuf[4096];
     int  nSize = sizeof(szBuf);
     BOOL success=[self encoderAAC:sampleBuffer aacData:szBuf aacLen:&nSize];
+    printf("encoding audio  %s , %d\n", success?"true":"false", nSize);
     if (success)
     {
         AVPacket avpkt;
@@ -359,12 +358,12 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         
         avpkt.data=(uint8_t*)szBuf;
         avpkt.size=nSize;
-        
+
         AVStream* audioStream=[self audioStream];
         
-        frameIndex_++;
         avpkt.stream_index = audioStream->index;
         
+        /*
         //Write PTS
         AVRational time_base = audioStream->time_base;//{ 1, 1000 };
         AVRational time_base_q = { 1, AV_TIME_BASE };
@@ -382,6 +381,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         int64_t now_time = av_gettime() - start_time;
         if (pts_time > now_time)
             av_usleep((unsigned)(pts_time - now_time));
+         
+         */
         
         [self writePacket:&avpkt];
         
@@ -389,17 +390,6 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     }
     return;
 
-    /*
-    AudioStreamBasicDescription outputFormat = *(CMAudioFormatDescriptionGetStreamBasicDescription(CMSampleBufferGetFormatDescription(sampleBuffer)));
-    nSize = CMSampleBufferGetTotalSampleSize(sampleBuffer);
-    CMBlockBufferRef databuf = CMSampleBufferGetDataBuffer(sampleBuffer);
-    if (CMBlockBufferCopyDataBytes(databuf, 0, nSize, szBuf) == kCMBlockBufferNoErr)
-    {
-        //[g_pViewController sendAudioData:szBuf len:nSize channel:outputFormat.mChannelsPerFrame];
-    }
-     */
-    
-    
     /*
     AudioBufferList audioBufferList;
     CMBlockBufferRef blockBuffer=NULL;
@@ -417,8 +407,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     
     CFRelease(blockBuffer);
     blockBuffer = NULL;*/
-    
-    
+ 
     
     CMItemCount numSamples = CMSampleBufferGetNumSamples(sampleBuffer); //CMSampleBufferRef
     CMBlockBufferRef audioBlockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer);
@@ -614,7 +603,7 @@ OSStatus inputDataProc(AudioConverterRef inConverter, UInt32 *ioNumberDataPacket
     
     if (ret<0)
     {
-        printf("Error push packet\n");
+        printf("Error writePacket packet. %d %s , stream_index %d\n", ret, av_err2str(ret), avpkt->stream_index);
     }
     
     return ret>=0;
