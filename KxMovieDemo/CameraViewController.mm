@@ -33,6 +33,8 @@ extern "C"
 #import "CameraStreamManager.h"
 
 
+const BOOL isDataOutput=YES;
+
 @interface CameraViewController() <AVCaptureFileOutputRecordingDelegate,AVCaptureVideoDataOutputSampleBufferDelegate,AVCaptureAudioDataOutputSampleBufferDelegate>
 {
 }
@@ -129,9 +131,8 @@ extern "C"
         [_captureSession addInput:audioCaptureDeviceInput];
     }
     
-    BOOL useFileOutput=NO;
-    BOOL useDataOutput=YES;
-    if(useFileOutput)
+
+    if(!isDataOutput)
     {
         //初始化设备输出对象，用于获得输出数据
         AVCaptureMovieFileOutput* captureMovieFileOutput=[[AVCaptureMovieFileOutput alloc] init];
@@ -147,7 +148,7 @@ extern "C"
             [_captureSession addOutput:captureMovieFileOutput];
         }
     }
-    else if(useDataOutput)
+    else
     {
         // 创建一个VideoDataOutput对象，将其添加到session
         AVCaptureVideoDataOutput* captureVideoDataOutput = [[AVCaptureVideoDataOutput alloc] init];

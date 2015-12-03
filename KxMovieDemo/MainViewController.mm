@@ -653,12 +653,18 @@ end:
     }
     else
     {
-        //[self pushStream:path];
-        //[self pushDeviceStream];
-        //[self showDevices];
-        
-        KxMovieViewController *vc = [KxMovieViewController movieViewControllerWithContentPath:path parameters:parameters];
-        [self presentViewController:vc animated:YES completion:nil];
+        BOOL push=NO;
+        if(push)
+        {
+            [self showDevices];
+            [self pushStream:path];
+            //[self pushDeviceStream];
+        }
+        else
+        {
+            KxMovieViewController *vc = [KxMovieViewController movieViewControllerWithContentPath:path parameters:parameters];
+            [self presentViewController:vc animated:YES completion:nil];
+        }
     }
 }
 

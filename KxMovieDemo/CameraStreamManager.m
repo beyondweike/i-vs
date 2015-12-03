@@ -21,6 +21,7 @@
 
 #import "CameraStreamManager.h"
 #import "time.h"
+#import <AudioToolbox/AudioConverter.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,6 +53,8 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     int64_t start_time;
     
     AVRational rframeRate_;//AVStream.r_frame_rate
+    
+    AudioConverterRef m_converter;
 }
 
 -(void)dealloc
@@ -157,7 +160,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     codecCtx->sample_rate= 44100;//16000//48000
     codecCtx->channel_layout=AV_CH_LAYOUT_MONO;//AV_CH_LAYOUT_STEREO;
     codecCtx->channels = av_get_channel_layout_nb_channels(codecCtx->channel_layout);
-    codecCtx->bit_rate = 64000;//32000
+    codecCtx->bit_rate = 64142;//64000;//32000
     codecCtx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
     codecCtx->profile=FF_PROFILE_AAC_LOW;
     codecCtx->time_base = (AVRational){1, codecCtx->sample_rate };
@@ -341,11 +344,66 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     //http://course.gdou.com/blog/Blog.pzs/archive/2011/12/14/10882.html
     //http://www.devdiv.com/forum.php?mod=viewthread&tid=179307
     //http://blog.csdn.net/leixiaohua1020/article/details/25430449
+    //http://www.codes51.com/article/detail_151894.html
+
+    
+    char szBuf[4096];
+    int  nSize = sizeof(szBuf);
+    BOOL success=[self encoderAAC:sampleBuffer aacData:szBuf aacLen:&nSize];
+    if (success)
+    {
+        AVPacket avpkt;
+        avpkt.data = NULL;
+        avpkt.size = 0;
+        av_init_packet(&avpkt);
+        
+        avpkt.data=(uint8_t*)szBuf;
+        avpkt.size=nSize;
+        
+        AVStream* audioStream=[self audioStream];
+        
+        frameIndex_++;
+        avpkt.stream_index = audioStream->index;
+        
+        //Write PTS
+        AVRational time_base = audioStream->time_base;//{ 1, 1000 };
+        AVRational time_base_q = { 1, AV_TIME_BASE };
+        //Duration between 2 frames (us)
+        int64_t calc_duration = (double)(AV_TIME_BASE)*(1 / av_q2d(rframeRate_));  //内部时间戳
+        //Parameters
+        //enc_pkt.pts = (double)(framecnt*calc_duration)*(double)(av_q2d(time_base_q)) / (double)(av_q2d(time_base));
+        avpkt.pts = av_rescale_q(frameIndex_*calc_duration, time_base_q, time_base);
+        avpkt.dts = avpkt.pts;
+        avpkt.duration = av_rescale_q(calc_duration, time_base_q, time_base); //(double)(calc_duration)*(double)(av_q2d(time_base_q)) / (double)(av_q2d(time_base));
+        avpkt.pos = -1;
+        
+        //Delay
+        int64_t pts_time = av_rescale_q(avpkt.dts, time_base, time_base_q);
+        int64_t now_time = av_gettime() - start_time;
+        if (pts_time > now_time)
+            av_usleep((unsigned)(pts_time - now_time));
+        
+        [self writePacket:&avpkt];
+        
+        av_free_packet(&avpkt);
+    }
+    return;
+
+    /*
+    AudioStreamBasicDescription outputFormat = *(CMAudioFormatDescriptionGetStreamBasicDescription(CMSampleBufferGetFormatDescription(sampleBuffer)));
+    nSize = CMSampleBufferGetTotalSampleSize(sampleBuffer);
+    CMBlockBufferRef databuf = CMSampleBufferGetDataBuffer(sampleBuffer);
+    if (CMBlockBufferCopyDataBytes(databuf, 0, nSize, szBuf) == kCMBlockBufferNoErr)
+    {
+        //[g_pViewController sendAudioData:szBuf len:nSize channel:outputFormat.mChannelsPerFrame];
+    }
+     */
+    
     
     /*
     AudioBufferList audioBufferList;
     CMBlockBufferRef blockBuffer=NULL;
-    NSMutableData* data = [[NSMutableData alloc] init];
+    NSMutableData* mData = [[NSMutableData alloc] init];
     
     CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, NULL, &audioBufferList, sizeof(audioBufferList), NULL, NULL, 0, &blockBuffer);
     
@@ -354,7 +412,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     {
         AudioBuffer audioBuffer = audioBufferList.mBuffers[y];
         Float32 *frame = (Float32 *)audioBuffer.mData;
-        [data appendBytes:frame length:audioBuffer.mDataByteSize];
+        [mData appendBytes:frame length:audioBuffer.mDataByteSize];
     }
     
     CFRelease(blockBuffer);
@@ -368,7 +426,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     size_t audioBlockBufferOffset = (channelIndex * numSamples * sizeof(SInt16));
     size_t lengthAtOffset = 0;
     size_t totalLength = 0;
-    SInt16 *samples = NULL;
+    char* samples = NULL;
     CMBlockBufferGetDataPointer(audioBlockBuffer, audioBlockBufferOffset, &lengthAtOffset, &totalLength, (char **)(&samples));
     const AudioStreamBasicDescription *audioDescription = CMAudioFormatDescriptionGetStreamBasicDescription(CMSampleBufferGetFormatDescription(sampleBuffer));
     
@@ -377,14 +435,18 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     outFrame->nb_samples =(int)numSamples;//audioCodeContext_->frame_size;
     outFrame->channels=audioDescription->mChannelsPerFrame;
     outFrame->sample_rate=(int)audioDescription->mSampleRate;
+    outFrame->channel_layout = audioCodeContext_->channel_layout;
+    
+    //int size = av_samples_get_buffer_size(NULL, audioCodeContext_->channels,audioCodeContext_->frame_size,audioCodeContext_->sample_fmt, 1);
     
     int buf_size=outFrame->nb_samples * av_get_bytes_per_sample(audioCodeContext_->sample_fmt) * outFrame->channels;
     uint8_t *outbuff=av_malloc(buf_size);
+    memcpy(outbuff, samples, buf_size);
     outFrame->linesize[0] = buf_size;
     outFrame->extended_data = outFrame->data[0] = outbuff;
     
     //my webCamera configured to produce 16bit 16kHz LPCM mono, so sample format hardcoded here, and seems to be correct
-    int ret=avcodec_fill_audio_frame(outFrame, audioCodeContext_->channels, audioCodeContext_->sample_fmt, (uint8_t *)samples, buf_size, 0);
+    int rett=avcodec_fill_audio_frame(outFrame, audioCodeContext_->channels, audioCodeContext_->sample_fmt, outbuff, buf_size, 1);
     
     AVPacket avpkt;
     avpkt.data = NULL;
@@ -398,14 +460,20 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     
     
     int got_packet=0;
-    ret = avcodec_encode_audio2(audioCodeContext_, &avpkt, outFrame, &got_packet);
-    if (ret >= 0 && got_packet>0)
+    int ret = avcodec_encode_audio2(audioCodeContext_, &avpkt, outFrame, &got_packet);
+    if (ret>=0)
     {
-        //av_err2str(ret));
-
+        if(got_packet>0)
+        {
+            
+        }
+    }
+    else
+    {
+        printf("encode fail %s\n", av_err2str(ret));
     }
     
-    av_freep(outbuff);
+    ////av_freep(outbuff);
     av_free_packet(&avpkt);
     av_frame_free(&outFrame);
     
@@ -449,6 +517,94 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
             av_free_packet(&pkt);
         }
     }*/
+}
+
+
+-(BOOL)createAudioConvert:(CMSampleBufferRef)sampleBuffer { //根据输入样本初始化一个编码转换器
+    if (m_converter != nil)
+    {
+        return TRUE;
+    }
+    
+    AudioStreamBasicDescription inputFormat = *(CMAudioFormatDescriptionGetStreamBasicDescription(CMSampleBufferGetFormatDescription(sampleBuffer))); // 输入音频格式
+    AudioStreamBasicDescription outputFormat; // 这里开始是输出音频格式
+    memset(&outputFormat, 0, sizeof(outputFormat));
+    outputFormat.mSampleRate       = inputFormat.mSampleRate; // 采样率保持一致
+    outputFormat.mFormatID         = kAudioFormatMPEG4AAC;    // AAC编码
+    outputFormat.mChannelsPerFrame = 2;
+    outputFormat.mFramesPerPacket  = 1024;                    // AAC一帧是1024个字节
+    
+    AudioClassDescription *desc = [self getAudioClassDescriptionWithType:kAudioFormatMPEG4AAC fromManufacturer:kAppleSoftwareAudioCodecManufacturer];
+    if (AudioConverterNewSpecific(&inputFormat, &outputFormat, 1, desc, &m_converter) != noErr)
+    {
+        //CKPrint(@"AudioConverterNewSpecific failed");
+        return NO;
+    }
+    
+    return YES;
+}
+-(BOOL)encoderAAC:(CMSampleBufferRef)sampleBuffer aacData:(char*)aacData aacLen:(int*)aacLen { // 编码PCM成AAC
+    if ([self createAudioConvert:sampleBuffer] != YES)
+    {
+        return NO;
+    }
+    
+    CMBlockBufferRef blockBuffer = nil;
+    AudioBufferList  inBufferList;
+    if (CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, NULL, &inBufferList, sizeof(inBufferList), NULL, NULL, 0, &blockBuffer) != noErr)
+    {
+        //CKPrint(@"CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer failed");
+        return NO;
+    }
+    // 初始化一个输出缓冲列表
+    AudioBufferList outBufferList;
+    outBufferList.mNumberBuffers              = 1;
+    outBufferList.mBuffers[0].mNumberChannels = 2;
+    outBufferList.mBuffers[0].mDataByteSize   = *aacLen; // 设置缓冲区大小
+    outBufferList.mBuffers[0].mData           = aacData; // 设置AAC缓冲区
+    UInt32 outputDataPacketSize               = 1;
+    if (AudioConverterFillComplexBuffer(m_converter, inputDataProc, &inBufferList, &outputDataPacketSize, &outBufferList, NULL) != noErr)
+    {
+        //CKPrint(@"AudioConverterFillComplexBuffer failed");
+        return NO;
+    }
+    
+    *aacLen = outBufferList.mBuffers[0].mDataByteSize; //设置编码后的AAC大小
+    CFRelease(blockBuffer);
+    return YES;
+}
+-(AudioClassDescription*)getAudioClassDescriptionWithType:(UInt32)type fromManufacturer:(UInt32)manufacturer { // 获得相应的编码器
+    static AudioClassDescription audioDesc;
+    
+    UInt32 encoderSpecifier = type, size = 0;
+    OSStatus status;
+    
+    memset(&audioDesc, 0, sizeof(audioDesc));
+    status = AudioFormatGetPropertyInfo(kAudioFormatProperty_Encoders, sizeof(encoderSpecifier), &encoderSpecifier, &size);
+    if (status)
+    {
+        return nil;
+    }
+    
+    uint32_t count = size / sizeof(AudioClassDescription);
+    AudioClassDescription descs[count];
+    status = AudioFormatGetProperty(kAudioFormatProperty_Encoders, sizeof(encoderSpecifier), &encoderSpecifier, &size, descs);
+    for (uint32_t i = 0; i < count; i++)
+    {
+        if ((type == descs[i].mSubType) && (manufacturer == descs[i].mManufacturer))
+        {
+            memcpy(&audioDesc, &descs[i], sizeof(audioDesc));
+            break;
+        }
+    }
+    return &audioDesc;
+}
+OSStatus inputDataProc(AudioConverterRef inConverter, UInt32 *ioNumberDataPackets, AudioBufferList *ioData,AudioStreamPacketDescription **outDataPacketDescription, void *inUserData) { //<span style="font-family: Arial, Helvetica, sans-serif;">AudioConverterFillComplexBuffer 编码过程中，会要求这个函数来填充输入数据，也就是原始PCM数据</span>
+    AudioBufferList bufferList = *(AudioBufferList*)inUserData;
+    ioData->mBuffers[0].mNumberChannels = 1;
+    ioData->mBuffers[0].mData           = bufferList.mBuffers[0].mData;
+    ioData->mBuffers[0].mDataByteSize   = bufferList.mBuffers[0].mDataByteSize;
+    return noErr;
 }
 
 - (BOOL)writePacket:(AVPacket*)avpkt
