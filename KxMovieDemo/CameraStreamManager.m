@@ -156,7 +156,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     codecCtx->flags |= CODEC_FLAG_GLOBAL_HEADER ;
     codecCtx->codec_type = AVMEDIA_TYPE_AUDIO;
     /*AV_SAMPLE_FMT_S16 Specified sample format s16 is invalid or not supported*/
-    codecCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+    codecCtx->sample_fmt = AV_SAMPLE_FMT_S16;
     codecCtx->sample_rate= 44100;//16000//48000
     codecCtx->channel_layout=AV_CH_LAYOUT_MONO;//AV_CH_LAYOUT_STEREO;
     codecCtx->channels = av_get_channel_layout_nb_channels(codecCtx->channel_layout);
@@ -338,7 +338,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
 }
 
-- (void)writeAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer
+- (void)writeAudioSampleBuffer2:(CMSampleBufferRef)sampleBuffer
 {
     //http://course.gdou.com/blog/Blog.pzs/archive/2011/12/14/10882.html
     //http://www.devdiv.com/forum.php?mod=viewthread&tid=179307
@@ -360,7 +360,6 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         avpkt.size=nSize;
 
         AVStream* audioStream=[self audioStream];
-        
         avpkt.stream_index = audioStream->index;
         
         /*
@@ -381,35 +380,37 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
         int64_t now_time = av_gettime() - start_time;
         if (pts_time > now_time)
             av_usleep((unsigned)(pts_time - now_time));
-         
          */
         
         [self writePacket:&avpkt];
         
         av_free_packet(&avpkt);
     }
-    return;
+}
 
+- (void)writeAudioSampleBuffer:(CMSampleBufferRef)sampleBuffer
+{
+     AudioBufferList audioBufferList;
+     CMBlockBufferRef blockBuffer=NULL;
+     NSMutableData* mData = [[NSMutableData alloc] init];
+     
+     CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, NULL, &audioBufferList, sizeof(audioBufferList), NULL, NULL, 0, &blockBuffer);
+     
+     UInt32 mNumberBuffers=audioBufferList.mNumberBuffers;
+     for (int y = 0; y < mNumberBuffers; y++)
+     {
+         AudioBuffer audioBuffer = audioBufferList.mBuffers[y];
+         Float32 *frame = (Float32 *)audioBuffer.mData;
+         [mData appendBytes:frame length:audioBuffer.mDataByteSize];
+     }
+     
+     CFRelease(blockBuffer);
+     blockBuffer = NULL;
+    
+    CMItemCount numSamples = CMSampleBufferGetNumSamples(sampleBuffer);
+    const AudioStreamBasicDescription *audioDescription = CMAudioFormatDescriptionGetStreamBasicDescription(CMSampleBufferGetFormatDescription(sampleBuffer));
+    
     /*
-    AudioBufferList audioBufferList;
-    CMBlockBufferRef blockBuffer=NULL;
-    NSMutableData* mData = [[NSMutableData alloc] init];
-    
-    CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sampleBuffer, NULL, &audioBufferList, sizeof(audioBufferList), NULL, NULL, 0, &blockBuffer);
-    
-    UInt32 mNumberBuffers=audioBufferList.mNumberBuffers;
-    for (int y = 0; y < mNumberBuffers; y++)
-    {
-        AudioBuffer audioBuffer = audioBufferList.mBuffers[y];
-        Float32 *frame = (Float32 *)audioBuffer.mData;
-        [mData appendBytes:frame length:audioBuffer.mDataByteSize];
-    }
-    
-    CFRelease(blockBuffer);
-    blockBuffer = NULL;*/
- 
-    
-    CMItemCount numSamples = CMSampleBufferGetNumSamples(sampleBuffer); //CMSampleBufferRef
     CMBlockBufferRef audioBlockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer);
     NSUInteger channelIndex = 0;
     size_t audioBlockBufferOffset = (channelIndex * numSamples * sizeof(SInt16));
@@ -417,7 +418,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     size_t totalLength = 0;
     char* samples = NULL;
     CMBlockBufferGetDataPointer(audioBlockBuffer, audioBlockBufferOffset, &lengthAtOffset, &totalLength, (char **)(&samples));
-    const AudioStreamBasicDescription *audioDescription = CMAudioFormatDescriptionGetStreamBasicDescription(CMSampleBufferGetFormatDescription(sampleBuffer));
+    */
     
     AVFrame* outFrame = av_frame_alloc();
     outFrame->format=audioCodeContext_->sample_fmt;
@@ -428,33 +429,41 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     
     //int size = av_samples_get_buffer_size(NULL, audioCodeContext_->channels,audioCodeContext_->frame_size,audioCodeContext_->sample_fmt, 1);
     
-    int buf_size=outFrame->nb_samples * av_get_bytes_per_sample(audioCodeContext_->sample_fmt) * outFrame->channels;
-    uint8_t *outbuff=av_malloc(buf_size);
-    memcpy(outbuff, samples, buf_size);
-    outFrame->linesize[0] = buf_size;
-    outFrame->extended_data = outFrame->data[0] = outbuff;
+//    int buf_size=outFrame->nb_samples * av_get_bytes_per_sample(audioCodeContext_->sample_fmt) * outFrame->channels;
+//    uint8_t *outbuff=av_malloc(buf_size);
+//    memcpy(outbuff, samples, buf_size);
+//    outFrame->linesize[0] = buf_size;
+//    outFrame->extended_data = outFrame->data[0] = outbuff;
+    
+    const uint8_t * buf=mData.mutableBytes;
+    int buf_size=mData.length;
     
     //my webCamera configured to produce 16bit 16kHz LPCM mono, so sample format hardcoded here, and seems to be correct
-    int rett=avcodec_fill_audio_frame(outFrame, audioCodeContext_->channels, audioCodeContext_->sample_fmt, outbuff, buf_size, 1);
+    int rett=avcodec_fill_audio_frame(outFrame, audioCodeContext_->channels, audioCodeContext_->sample_fmt, buf, buf_size, 1);
     
     AVPacket avpkt;
+    av_init_packet(&avpkt);
     avpkt.data = NULL;
     avpkt.size = 0;
-    av_init_packet(&avpkt);
+    
     
     //下面两句我加的。编码前一定要给frame时间戳
-    outFrame->pts = 1;
+    //outFrame->pts = 1;
     //lastpts = outFrame->pts + outFrame->nb_samples;
-    
-    
-    
+
     int got_packet=0;
     int ret = avcodec_encode_audio2(audioCodeContext_, &avpkt, outFrame, &got_packet);
     if (ret>=0)
     {
         if(got_packet>0)
         {
+            AVStream* audioStream=[self audioStream];
+            avpkt.stream_index = audioStream->index;
+            avpkt.pos = -1;
             
+            printf("write audio packet: Succeed to encode 1 frame!\tsize:%d\n", avpkt.size);
+            
+            [self writePacket:&avpkt];
         }
     }
     else
@@ -467,47 +476,46 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     av_frame_free(&outFrame);
     
     /*
-    AVFrame* pFrame = av_frame_alloc();
-    pFrame->nb_samples= audioCodeContext_->frame_size;
-    pFrame->format= audioCodeContext_->sample_fmt;
-    
-    int size = av_samples_get_buffer_size(NULL, audioCodeContext_->channels,audioCodeContext_->frame_size,audioCodeContext_->sample_fmt, 1);
-    uint8_t* frame_buf = (uint8_t *)av_malloc(size);
-    avcodec_fill_audio_frame(pFrame, audioCodeContext_->channels, audioCodeContext_->sample_fmt,(const uint8_t*)frame_buf, size, 1);
-    
-    AVPacket pkt;
-    av_new_packet(&pkt,size);
-    
-    int framenum=1000;
-    for (int i=0; i<framenum; i++)
-    {
-        //Read PCM
-        if (fread(frame_buf, 1, size, in_file) <= 0){
-            printf("Failed to read raw data! \n");
-            return -1;
-        }else if(feof(in_file)){
-            break;
-        }
-        
-        pFrame->data[0] = frame_buf;  //PCM Data
-        
-        pFrame->pts=i*100;
-        got_frame=0;
-        //Encode
-        ret = avcodec_encode_audio2(pCodecCtx, &pkt,pFrame, &got_frame);
-        if(ret < 0){
-            printf("Failed to encode!\n");
-            return -1;
-        }
-        if (got_frame==1){
-            printf("Succeed to encode 1 frame! \tsize:%5d\n",pkt.size);
-            pkt.stream_index = audio_st->index;
-            ret = av_write_frame(pFormatCtx, &pkt);
-            av_free_packet(&pkt);
-        }
-    }*/
+     AVFrame* pFrame = av_frame_alloc();
+     pFrame->nb_samples= audioCodeContext_->frame_size;
+     pFrame->format= audioCodeContext_->sample_fmt;
+     
+     int size = av_samples_get_buffer_size(NULL, audioCodeContext_->channels,audioCodeContext_->frame_size,audioCodeContext_->sample_fmt, 1);
+     uint8_t* frame_buf = (uint8_t *)av_malloc(size);
+     avcodec_fill_audio_frame(pFrame, audioCodeContext_->channels, audioCodeContext_->sample_fmt,(const uint8_t*)frame_buf, size, 1);
+     
+     AVPacket pkt;
+     av_new_packet(&pkt,size);
+     
+     int framenum=1000;
+     for (int i=0; i<framenum; i++)
+     {
+     //Read PCM
+     if (fread(frame_buf, 1, size, in_file) <= 0){
+     printf("Failed to read raw data! \n");
+     return -1;
+     }else if(feof(in_file)){
+     break;
+     }
+     
+     pFrame->data[0] = frame_buf;  //PCM Data
+     
+     pFrame->pts=i*100;
+     got_frame=0;
+     //Encode
+     ret = avcodec_encode_audio2(pCodecCtx, &pkt,pFrame, &got_frame);
+     if(ret < 0){
+     printf("Failed to encode!\n");
+     return -1;
+     }
+     if (got_frame==1){
+     printf("Succeed to encode 1 frame! \tsize:%5d\n",pkt.size);
+     pkt.stream_index = audio_st->index;
+     ret = av_write_frame(pFormatCtx, &pkt);
+     av_free_packet(&pkt);
+     }
+     }*/
 }
-
 
 -(BOOL)createAudioConvert:(CMSampleBufferRef)sampleBuffer { //根据输入样本初始化一个编码转换器
     if (m_converter != nil)
@@ -613,6 +621,7 @@ OSStatus inputDataProc(AudioConverterRef inConverter, UInt32 *ioNumberDataPacket
 {
     //Flush Encoder
     [self flushVideoStream];
+    [self flushAudioStream];
     
     //Write file trailer
     av_write_trailer(outputContext_);
@@ -677,6 +686,52 @@ OSStatus inputDataProc(AudioConverterRef inConverter, UInt32 *ioNumberDataPacket
         enc_pkt.pos = -1;
         frameIndex_++;
         outputContext_->duration = enc_pkt.duration * frameIndex_;
+        
+        BOOL ret=[self writePacket:&enc_pkt];
+        if(!ret)
+        {
+            break;
+        }
+    }
+}
+
+-(void)flushAudioStream
+{
+    AVStream* audioStream=[self audioStream];
+    if (!audioStream)
+    {
+        return;
+    }
+    
+    if (!(audioStream->codec->codec->capabilities & CODEC_CAP_DELAY))
+    {
+        return;
+    }
+    
+    int ret;
+    int got_frame;
+    AVPacket enc_pkt;
+    
+    while (1)
+    {
+        enc_pkt.data = NULL;
+        enc_pkt.size = 0;
+        av_init_packet(&enc_pkt);
+        ret = avcodec_encode_audio2(audioCodeContext_, &enc_pkt, NULL, &got_frame);
+        if (ret < 0)
+        {
+            break;
+        }
+        
+        if (!got_frame)
+        {
+            ret = 0;
+            break;
+        }
+        
+        printf("flushAudioStream: Succeed to encode 1 frame!\tsize:%5d\n", enc_pkt.size);
+        
+        enc_pkt.stream_index=audioStream->index;
         
         BOOL ret=[self writePacket:&enc_pkt];
         if(!ret)

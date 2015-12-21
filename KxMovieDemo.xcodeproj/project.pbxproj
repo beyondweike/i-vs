@@ -28,6 +28,7 @@
 		73982F1C1BE30DDF0068FEA5 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73982F1B1BE30DDF0068FEA5 /* Accelerate.framework */; };
 		73982F1E1BE30DE50068FEA5 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73982F1D1BE30DE50068FEA5 /* QuartzCore.framework */; };
 		73982F201BE30DED0068FEA5 /* OpenGLES.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73982F1F1BE30DED0068FEA5 /* OpenGLES.framework */; };
+		73A0F3C01C27E1F30082A8E9 /* libfaac.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 73A0F3BF1C27E1F20082A8E9 /* libfaac.a */; };
 		73D92FB51BE356EB00CC1DA5 /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73D92FB41BE356EB00CC1DA5 /* CoreVideo.framework */; };
 		73D92FB71BE356F000CC1DA5 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73D92FB61BE356F000CC1DA5 /* VideoToolbox.framework */; };
 		73D92FB91BE3579E00CC1DA5 /* CoreMedia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 73D92FB81BE3579E00CC1DA5 /* CoreMedia.framework */; };
@@ -80,6 +81,7 @@
 		73982F1B1BE30DDF0068FEA5 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		73982F1D1BE30DE50068FEA5 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		73982F1F1BE30DED0068FEA5 /* OpenGLES.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGLES.framework; path = System/Library/Frameworks/OpenGLES.framework; sourceTree = SDKROOT; };
+		73A0F3BF1C27E1F20082A8E9 /* libfaac.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libfaac.a; path = KxMovieDemo/faac_armv7/lib/libfaac.a; sourceTree = "<group>"; };
 		73D92FB41BE356EB00CC1DA5 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
 		73D92FB61BE356F000CC1DA5 /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
 		73D92FB81BE3579E00CC1DA5 /* CoreMedia.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMedia.framework; path = System/Library/Frameworks/CoreMedia.framework; sourceTree = SDKROOT; };
@@ -118,6 +120,7 @@
 				73D92FB71BE356F000CC1DA5 /* VideoToolbox.framework in Frameworks */,
 				1E99FE451C075E6F00304AC6 /* libavformat.a in Frameworks */,
 				73D92FB51BE356EB00CC1DA5 /* CoreVideo.framework in Frameworks */,
+				73A0F3C01C27E1F30082A8E9 /* libfaac.a in Frameworks */,
 				807A94E11B1E9ED100096F84 /* libiconv.dylib in Frameworks */,
 				73982F201BE30DED0068FEA5 /* OpenGLES.framework in Frameworks */,
 				1E99FE421C075E6F00304AC6 /* libavcodec.a in Frameworks */,
@@ -150,6 +153,7 @@
 		807A93C41B1E9BE800096F84 = {
 			isa = PBXGroup;
 			children = (
+				73A0F3BF1C27E1F20082A8E9 /* libfaac.a */,
 				1EFE67FC1C0CABD300D7CF61 /* libx264.a */,
 				1E99FE3A1C075E6F00304AC6 /* libavcodec.a */,
 				1E99FE3B1C075E6F00304AC6 /* libavdevice.a */,
@@ -495,10 +499,11 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/KxMovieDemo/ffmpeg_armv7/lib",
 					"$(PROJECT_DIR)/KxMovieDemo/x264_armv7/lib",
+					"$(PROJECT_DIR)/KxMovieDemo/faac_armv7/lib",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
-				USER_HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/KxMovieDemo/ffmpeg_armv7/include $(PROJECT_DIR)/KxMovieDemo/x264_armv7/include";
+				USER_HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/KxMovieDemo/ffmpeg_armv7/include $(PROJECT_DIR)/KxMovieDemo/x264_armv7/include $(PROJECT_DIR)/KxMovieDemo/faac_armv7/include";
 			};
 			name = Debug;
 		};
@@ -517,10 +522,11 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/KxMovieDemo/ffmpeg_armv7/lib",
 					"$(PROJECT_DIR)/KxMovieDemo/x264_armv7/lib",
+					"$(PROJECT_DIR)/KxMovieDemo/faac_armv7/lib",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
-				USER_HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/KxMovieDemo/ffmpeg_armv7/include $(PROJECT_DIR)/KxMovieDemo/x264_armv7/include";
+				USER_HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/KxMovieDemo/ffmpeg_armv7/include $(PROJECT_DIR)/KxMovieDemo/x264_armv7/include $(PROJECT_DIR)/KxMovieDemo/faac_armv7/include";
 			};
 			name = Release;
 		};
