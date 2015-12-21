@@ -37,6 +37,7 @@ extern "C" {
 };
 #endif
 
+const BOOL TestRtmp=NO;
 const char* TestRTMPOutputPath = "rtmp://139.129.28.153:1935/myapp/test";
 const int TestCameraWidth=640;
 const int TestCameraHeight=480;
@@ -68,7 +69,7 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
     if (self)
     {
         outputPath_=outputPath;
-        if(!outputPath_)
+        if(TestRtmp)
         {
             outputPath_=[NSString stringWithUTF8String:TestRTMPOutputPath];
         }
