@@ -19,6 +19,15 @@
  iOS提供的播放器类使用的是硬解码，所以视频播放对CPU不会有很大的压力，但是支持的播放格式比较单一，一般就是MP4、MOV、M4V这几个。
  */
 
+/*
+ 单独存本地视频成功
+ 单独存本地声音，只能听见前几秒
+ 同时存本地视频声音成功
+ 同时上传视频声音失败
+ 单独上传视频成功，但有延迟几秒
+ 单独上传声音能听见但出现重复不断
+ */
+
 #import "CameraStreamManager.h"
 #import "time.h"
 #import <AudioToolbox/AudioConverter.h>
