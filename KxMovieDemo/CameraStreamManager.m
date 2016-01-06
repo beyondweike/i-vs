@@ -350,11 +350,6 @@ const enum AVPixelFormat DestPixFmt=AV_PIX_FMT_YUV420P;
 
 - (void)writeAudioSampleBuffer2:(CMSampleBufferRef)sampleBuffer
 {
-    //http://course.gdou.com/blog/Blog.pzs/archive/2011/12/14/10882.html
-    //http://www.devdiv.com/forum.php?mod=viewthread&tid=179307
-    //http://blog.csdn.net/leixiaohua1020/article/details/25430449
-    //http://www.codes51.com/article/detail_151894.html
-
     char szBuf[4096];
     int  nSize = sizeof(szBuf);
     BOOL success=[self encoderAAC:sampleBuffer aacData:szBuf aacLen:&nSize];
@@ -623,7 +618,7 @@ OSStatus inputDataProc(AudioConverterRef inConverter, UInt32 *ioNumberDataPacket
     {
         printf("Error writePacket packet. %d %s , stream_index %d\n", ret, av_err2str(ret), avpkt->stream_index);
     }
-    
+
     return ret>=0;
 }
 

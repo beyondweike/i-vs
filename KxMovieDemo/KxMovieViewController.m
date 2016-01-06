@@ -887,7 +887,8 @@ static NSMutableDictionary * gHistory;
                                 _debugAudioStatus = 1;
                                 _debugAudioStatusTS = [NSDate date];
 #endif
-                                break; // silence and exit
+                                /*//去掉break，只录制声音时才不会只播放前面一点
+                                break; // silence and exit*/
                             }
                             
                             [_audioFrames removeObjectAtIndex:0];

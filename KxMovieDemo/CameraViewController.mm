@@ -34,6 +34,7 @@ extern "C"
 
 
 const BOOL isDataOutput=YES;
+const BOOL CaptureVideo=YES;
 
 @interface CameraViewController() <AVCaptureFileOutputRecordingDelegate,AVCaptureVideoDataOutputSampleBufferDelegate,AVCaptureAudioDataOutputSampleBufferDelegate>
 {
@@ -1335,7 +1336,7 @@ end:
 {
     if(captureOutput==videoDataOutput_)
     {
-        if(h264ManagerReady_)
+        if(CaptureVideo && h264ManagerReady_)
         {
             [cameraStreamManager_ writeVideoSampleBuffer:sampleBuffer];
         }
